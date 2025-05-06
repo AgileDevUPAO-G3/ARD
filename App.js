@@ -6,7 +6,7 @@ import StackNavigator from './navigation/StackNavigator';
 
 export default function App() {
   //modificar para prueba a StackNavigarion
-  return <AddDebtScreen />;
+  return <StackNavigator />;
 }
 
 const styles = StyleSheet.create({
