@@ -23,7 +23,7 @@ export default function HomeScreen({ navigation }) {
         return unsubscribe;
     }, [navigation]);
 
-    const renderItem = ({ item }) => {
+    const renderItem = ({ item, index }) => {
         const hoy = new Date();
         hoy.setHours(0, 0, 0, 0);
 
@@ -86,13 +86,23 @@ export default function HomeScreen({ navigation }) {
                 <Text style={styles.texto}>📆 Próximo pago: {fechaSiguiente}</Text>
 
                 {futuras.length > 0 && (
-                    <TouchableOpacity
-                        style={styles.botonSecundario}
-                        onPress={() => navigation.navigate('MarcarPagado', { deuda: item })}
-                    >
-                        <Text style={styles.botonSecundarioTexto}>Marcar como pagado</Text>
-                    </TouchableOpacity>
+                    <>
+                        <TouchableOpacity
+                            style={styles.botonVerHistorial}
+                            onPress={() => navigation.navigate('Historial', { deuda: item })}
+                        >
+                            <Text style={styles.texto}>📚 Ver historial</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={styles.botonSecundario}
+                            onPress={() => navigation.navigate('MarcarPagado', { deuda: item, index })}
+                        >
+                            <Text style={styles.botonSecundarioTexto}>Marcar como pagado</Text>
+                        </TouchableOpacity>
+                    </>
                 )}
+
             </View>
         );
     };
@@ -175,5 +185,13 @@ const getStyles = (modo) => {
             color: '#fff',
             fontWeight: 'bold',
         },
+        botonVerHistorial: {
+            marginTop: 10,
+            backgroundColor: '#aaa',
+            padding: 10,
+            borderRadius: 5,
+            alignItems: 'center',
+        }
+
     });
 };

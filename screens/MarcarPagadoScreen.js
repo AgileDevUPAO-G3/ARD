@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import {
-    View, Text, StyleSheet, TouchableOpacity, Alert, Image, Modal, TouchableWithoutFeedback, Linking
+    View, Text, StyleSheet, TouchableOpacity, Alert,
+    Image, Modal, TouchableWithoutFeedback
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
@@ -13,21 +14,15 @@ export default function MarcarPagadoScreen({ route, navigation }) {
     const styles = getStyles(esquema);
 
     const [modalVisible, setModalVisible] = useState(false);
-    const [comprobante, setComprobante] = useState(null); // { uri, type, name }
+    const [comprobanteUri, setComprobanteUri] = useState(null);
 
-    const seleccionarArchivo = async () => {
+    const seleccionarComprobante = async () => {
         const resultado = await DocumentPicker.getDocumentAsync({
-            type: ['image/*', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
-            copyToCacheDirectory: true,
+            type: ['image/*', 'application/pdf', 'application/msword'],
         });
 
         if (!resultado.canceled && resultado.assets?.length > 0) {
-            const file = resultado.assets[0];
-            setComprobante({
-                uri: file.uri,
-                name: file.name,
-                type: file.mimeType || '',
-            });
+            setComprobanteUri(resultado.assets[0].uri);
         }
     };
 
@@ -44,37 +39,35 @@ export default function MarcarPagadoScreen({ route, navigation }) {
         });
 
         if (!resultado.canceled && resultado.assets?.length > 0) {
-            const image = resultado.assets[0];
-            setComprobante({
-                uri: image.uri,
-                name: 'foto.jpg',
-                type: 'image',
-            });
+            setComprobanteUri(resultado.assets[0].uri);
         }
     };
 
     const marcarComoPagado = async () => {
-        if (!comprobante) {
-            Alert.alert('Falta comprobante', 'Por favor adjunta un comprobante antes de continuar.');
+        if (!comprobanteUri) {
+            Alert.alert('Comprobante requerido', 'Por favor, adjunta un comprobante antes de confirmar.');
             return;
         }
 
+        const nuevoComprobante = {
+            uri: comprobanteUri,
+            fecha: new Date().toISOString(),
+        };
+
+        const historialActual = deuda.historialPagos || [];
+
         const nuevaData = {
             estaPagada: true,
-            comprobanteUri: comprobante.uri,
-            comprobanteTipo: comprobante.type,
+            historialPagos: [...historialActual, nuevoComprobante],
         };
+
 
         await actualizarDeuda(index, nuevaData);
         Alert.alert('Éxito', 'Deuda marcada como pagada.');
         navigation.goBack();
     };
 
-    const abrirArchivo = () => {
-        if (comprobante?.uri) {
-            Linking.openURL(comprobante.uri);
-        }
-    };
+    const esImagen = /\.(jpg|jpeg|png|webp)$/i.test(comprobanteUri || '');
 
     return (
         <View style={styles.container}>
@@ -83,29 +76,31 @@ export default function MarcarPagadoScreen({ route, navigation }) {
             <Text style={styles.texto}>Monto: S/ {deuda.montoTotal}</Text>
             <Text style={styles.texto}>Fecha de inicio: {deuda.fechaInicio}</Text>
 
-            <TouchableOpacity style={styles.botonArchivo} onPress={seleccionarArchivo}>
+            <TouchableOpacity style={styles.botonArchivo} onPress={seleccionarComprobante}>
                 <Text style={styles.botonTexto}>
-                    {comprobante ? '📎 Cambiar comprobante' : '📎 Adjuntar comprobante'}
+                    {comprobanteUri ? '📎 Cambiar comprobante' : '📎 Adjuntar comprobante'}
                 </Text>
             </TouchableOpacity>
 
-            {comprobante && (
-                <View style={styles.previewContainer}>
+            {comprobanteUri && (
+                <>
                     <Text style={styles.texto}>Comprobante seleccionado:</Text>
-                    {comprobante.type.startsWith('image') ? (
+
+                    {esImagen ? (
                         <>
-                            <TouchableOpacity onPress={() => setModalVisible(true)}>
+                            <TouchableOpacity style={styles.previewContainer} onPress={() => setModalVisible(true)}>
                                 <Image
-                                    source={{ uri: comprobante.uri }}
+                                    source={{ uri: comprobanteUri }}
                                     style={styles.imagenPreview}
                                     resizeMode="contain"
                                 />
                             </TouchableOpacity>
+
                             <Modal visible={modalVisible} transparent>
                                 <TouchableWithoutFeedback onPress={() => setModalVisible(false)}>
                                     <View style={styles.modalOverlay}>
                                         <Image
-                                            source={{ uri: comprobante.uri }}
+                                            source={{ uri: comprobanteUri }}
                                             style={styles.imagenGrande}
                                             resizeMode="contain"
                                         />
@@ -114,12 +109,12 @@ export default function MarcarPagadoScreen({ route, navigation }) {
                             </Modal>
                         </>
                     ) : (
-                        <TouchableOpacity onPress={abrirArchivo} style={styles.archivoPreview}>
-                            <Text style={styles.archivoTexto}>📄 {comprobante.name}</Text>
-                            <Text style={styles.archivoSubtexto}>Tocar para abrir</Text>
-                        </TouchableOpacity>
+                        <View style={styles.archivoPreview}>
+                            <Text style={styles.texto}>📄 Documento adjunto</Text>
+                            <Text style={styles.archivoNombre}>{comprobanteUri.split('/').pop()}</Text>
+                        </View>
                     )}
-                </View>
+                </>
             )}
 
             <TouchableOpacity style={styles.botonGuardar} onPress={marcarComoPagado}>
@@ -183,7 +178,7 @@ const getStyles = (modo) => {
         },
         imagenPreview: {
             width: '100%',
-            height: 200,
+            height: 250,
             borderRadius: 8,
             borderWidth: 1,
             borderColor: '#999',
@@ -199,21 +194,18 @@ const getStyles = (modo) => {
             height: '80%',
         },
         archivoPreview: {
-            backgroundColor: '#f0f0f0',
-            padding: 10,
-            borderRadius: 5,
-            borderWidth: 1,
-            borderColor: '#aaa',
-            width: '100%',
+            marginVertical: 15,
             alignItems: 'center',
+            padding: 10,
+            borderRadius: 8,
+            backgroundColor: '#f0f0f0',
+            borderWidth: 1,
+            borderColor: '#999',
         },
-        archivoTexto: {
-            fontSize: 16,
+        archivoNombre: {
             color: '#333',
-        },
-        archivoSubtexto: {
-            fontSize: 12,
-            color: '#777',
+            fontSize: 14,
+            marginTop: 4,
         },
     });
 };

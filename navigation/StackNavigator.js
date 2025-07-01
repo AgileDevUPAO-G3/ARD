@@ -4,6 +4,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import HomeScreen from '../screens/HomeScreen';
 import AddDebtScreen from '../screens/AddDebtScreen';
 import MarcarPagadoScreen from '../screens/MarcarPagadoScreen';
+import HistorialScreen from "../screens/HistorialScreen";
 
 const Stack = createNativeStackNavigator();
 
@@ -28,6 +29,8 @@ export default function StackNavigator() {
                 <Stack.Screen name="INICIO" component={HomeScreen} />
                 <Stack.Screen name="Registrar deuda" component={AddDebtScreen} />
                 <Stack.Screen name="MarcarPagado" component={MarcarPagadoScreen} />
+                <Stack.Screen name="Historial" component={HistorialScreen} />
+
             </Stack.Navigator>
         </NavigationContainer>
     );
