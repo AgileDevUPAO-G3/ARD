@@ -23,39 +23,75 @@ export default function HomeScreen({ navigation }) {
         return unsubscribe;
     }, [navigation]);
 
-    // 🔢 Cálculo dinámico de cuotas vencidas
-    const obtenerCuotasVencidas = (detalleCuotas) => {
-        const hoy = new Date();
-        return detalleCuotas.filter(cuota => new Date(cuota.fecha) <= hoy).length;
-    };
-
     const renderItem = ({ item }) => {
-        const esCuotas = item.tipo === 'cuotas';
-        const estiloLateral = esCuotas ? styles.violeta : styles.amarillo;
+        const hoy = new Date();
+        hoy.setHours(0, 0, 0, 0);
 
-        let proximoPago = '';
-        let cuotasRestantes = item.cuotas;
+        let fechasPagos = [];
+        const fechaBase = new Date(item.fechaInicio);
 
-        if (esCuotas && Array.isArray(item.detalleCuotas)) {
-            const hoy = new Date().toISOString().split('T')[0];
-            const siguientes = item.detalleCuotas.filter(cuota => cuota.fecha >= hoy);
-            proximoPago = siguientes.length > 0 ? siguientes[0].fecha : '✔ Pagado';
-
-            const vencidas = obtenerCuotasVencidas(item.detalleCuotas);
-            cuotasRestantes = Math.max(item.cuotas - vencidas, 0);
+        if (item.frecuencia === 'único') {
+            fechasPagos = [fechaBase];
         }
 
+        if (item.frecuencia === 'dias') {
+            const rep = item.repeticiones || 100;
+            const intervalo = item.intervaloDias;
+            for (let i = 0; i < rep; i++) {
+                const f = new Date(fechaBase);
+                f.setDate(f.getDate() + i * intervalo);
+                fechasPagos.push(f);
+            }
+        }
+
+        if (item.frecuencia === 'semanal') {
+            const rep = item.repeticiones || 100;
+            for (let i = 0; i < rep; i++) {
+                const f = new Date(fechaBase);
+                f.setDate(f.getDate() + i * 7);
+                fechasPagos.push(f);
+            }
+        }
+
+        if (item.frecuencia === 'personalizada') {
+            fechasPagos = item.fechas?.map(f => new Date(f)) || [];
+        }
+
+        if (item.frecuencia === 'fija') {
+            const rep = item.meses || 100;
+            for (let i = 0; i < rep; i++) {
+                const f = new Date(fechaBase);
+                f.setMonth(f.getMonth() + i);
+                fechasPagos.push(f);
+            }
+        }
+
+        const vencidas = fechasPagos.filter(f => f <= hoy);
+        const futuras = fechasPagos.filter(f => f > hoy);
+
+        const fechaVencida = vencidas.length > 0
+            ? vencidas[vencidas.length - 1].toISOString().split('T')[0]
+            : '—';
+
+        const fechaSiguiente = futuras.length > 0
+            ? futuras[0].toISOString().split('T')[0]
+            : '✔ Completado';
+
         return (
-            <View style={[styles.item, estiloLateral]}>
+            <View style={[styles.item, styles.amarillo]}>
                 <Text style={styles.titulo}>💰 {item.motivo}</Text>
                 <Text style={styles.texto}>Monto total: S/ {item.montoTotal}</Text>
-                <Text style={styles.texto}>
-                    Tipo: {esCuotas ? (cuotasRestantes === 0 ? '✔ Pagado' : `Cuotas (${cuotasRestantes})`) : 'Pago único'}
-                </Text>
-                {esCuotas ? (
-                    <Text style={styles.texto}>Próximo pago: {proximoPago}</Text>
-                ) : (
-                    <Text style={styles.texto}>Día de pago: {item.fechaInicio}</Text>
+                <Text style={styles.texto}>Frecuencia: {item.frecuencia}</Text>
+                <Text style={styles.texto}>📅 Último pago vencido: {fechaVencida}</Text>
+                <Text style={styles.texto}>📆 Próximo pago: {fechaSiguiente}</Text>
+
+                {futuras.length > 0 && (
+                    <TouchableOpacity
+                        style={styles.botonSecundario}
+                        onPress={() => navigation.navigate('MarcarPagado', { deuda: item })}
+                    >
+                        <Text style={styles.botonSecundarioTexto}>Marcar como pagado</Text>
+                    </TouchableOpacity>
                 )}
             </View>
         );
@@ -105,9 +141,6 @@ const getStyles = (modo) => {
         amarillo: {
             borderLeftColor: '#FFD700',
         },
-        violeta: {
-            borderLeftColor: '#8A2BE2',
-        },
         titulo: {
             fontWeight: 'bold',
             fontSize: 16,
@@ -130,6 +163,17 @@ const getStyles = (modo) => {
             color: '#fff',
             fontWeight: 'bold',
             fontSize: 16,
+        },
+        botonSecundario: {
+            backgroundColor: '#4478d8',
+            marginTop: 12,
+            borderRadius: 5,
+            paddingVertical: 10,
+            alignItems: 'center',
+        },
+        botonSecundarioTexto: {
+            color: '#fff',
+            fontWeight: 'bold',
         },
     });
 };

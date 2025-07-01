@@ -24,3 +24,9 @@ export const obtenerDeudas = async () => {
         return [];
     }
 };
+
+export const actualizarDeuda = async (id, nuevaData) => {
+    const deudas = await obtenerDeudas();
+    deudas[id] = { ...deudas[id], ...nuevaData };
+    await AsyncStorage.setItem('deudas', JSON.stringify(deudas));
+};
