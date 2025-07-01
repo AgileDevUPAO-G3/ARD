@@ -27,16 +27,19 @@ export default function AddDebtScreen({ navigation }) {
     const onChangeFecha = (event, selectedDate) => {
         setMostrarPicker(false);
         if (selectedDate) {
-            if (indiceFechaPersonalizadaActual !== null) {
-                actualizarFechaPersonalizada(indiceFechaPersonalizadaActual, selectedDate);
-                setIndiceFechaPersonalizadaActual(null);
-            } else {
-                setFecha(selectedDate);
+            let nuevaFecha = new Date(selectedDate);
+
+            if (frecuencia === 'inicio_mes') {
+                nuevaFecha.setDate(1); // Siempre el primer día del mes
+            } else if (frecuencia === 'fin_mes') {
+                nuevaFecha.setMonth(nuevaFecha.getMonth() + 1); // Avanzamos al siguiente mes
+                nuevaFecha.setDate(0); // Último día del mes anterior (el mes actual)
             }
+
+            setFecha(nuevaFecha);
         }
     };
 
-    // ✅ FIX: ahora permite al usuario seleccionar la nueva fecha inmediatamente
     const agregarFechaPersonalizada = () => {
         const nuevaFecha = new Date();
         const nuevasFechas = [...fechasPersonalizadas, nuevaFecha];
@@ -92,6 +95,8 @@ export default function AddDebtScreen({ navigation }) {
             deuda.fechas = fechasPersonalizadas.map(f => f.toISOString().split('T')[0]);
         } else if (frecuencia === 'fija') {
             if (repeticiones) deuda.meses = repeticionesNum;
+        } else if (frecuencia === 'inicio_mes' || frecuencia === 'fin_mes') {
+            if (repeticiones) deuda.meses = repeticionesNum;
         }
 
         await guardarDeuda(deuda);
@@ -130,10 +135,40 @@ export default function AddDebtScreen({ navigation }) {
                     <Picker.Item label="Semanalmente" value="semanal" />
                     <Picker.Item label="Fecha personalizada" value="personalizada" />
                     <Picker.Item label="Mensual (fecha fija)" value="fija" />
+                    <Picker.Item label="Mensual (inicio de mes)" value="inicio_mes" />
+                    <Picker.Item label="Mensual (fin de mes)" value="fin_mes" />
                 </Picker>
             </View>
 
-            {(frecuencia === 'único' || frecuencia === 'dias' || frecuencia === 'semanal' || frecuencia === 'fija') && (
+            {(frecuencia === 'inicio_mes' || frecuencia === 'fin_mes') && (
+                <Text style={styles.label}>Seleccionar mes:</Text>
+            )}
+
+            {(frecuencia === 'inicio_mes' || frecuencia === 'fin_mes') && (
+                <Picker
+                    selectedValue={fecha.getMonth()}
+                    onValueChange={(itemValue) => {
+                        const nuevaFecha = new Date(fecha);
+                        nuevaFecha.setMonth(itemValue);
+                        nuevaFecha.setDate(frecuencia === 'inicio_mes' ? 1 : new Date(nuevaFecha.getFullYear(), nuevaFecha.getMonth() + 1, 0).getDate());
+                        setFecha(nuevaFecha);
+                    }}
+                    style={styles.picker}
+                >
+                    {['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'].map((mes, index) => (
+                        <Picker.Item key={index} label={mes} value={index} />
+                    ))}
+                </Picker>
+            )}
+
+            {(
+                frecuencia === 'único' ||
+                frecuencia === 'dias' ||
+                frecuencia === 'semanal' ||
+                frecuencia === 'fija' ||
+                frecuencia === 'inicio_mes' ||
+                frecuencia === 'fin_mes'
+            ) && (
                 <TouchableOpacity onPress={() => setMostrarPicker(true)} style={styles.input}>
                     <Text style={styles.text}>Fecha de inicio: {fecha.toISOString().split('T')[0]}</Text>
                 </TouchableOpacity>
@@ -148,6 +183,22 @@ export default function AddDebtScreen({ navigation }) {
                 />
             )}
 
+            {frecuencia !== 'único' && (
+                <>
+                    <TextInput
+                        placeholder="Repeticiones (opcional)"
+                        value={repeticiones}
+                        onChangeText={setRepeticiones}
+                        keyboardType="numeric"
+                        placeholderTextColor={styles.placeholder.color}
+                        style={styles.input}
+                    />
+                    <Text style={[styles.texto, { fontSize: 12, color: '#888' }]}>
+                        (Este campo es opcional. Si no se ingresa, la deuda será única.)
+                    </Text>
+                </>
+            )}
+
             {frecuencia === 'dias' && (
                 <>
                     <TextInput
@@ -158,37 +209,7 @@ export default function AddDebtScreen({ navigation }) {
                         placeholderTextColor={styles.placeholder.color}
                         style={styles.input}
                     />
-                    <TextInput
-                        placeholder="Repeticiones (opcional)"
-                        value={repeticiones}
-                        onChangeText={setRepeticiones}
-                        keyboardType="numeric"
-                        placeholderTextColor={styles.placeholder.color}
-                        style={styles.input}
-                    />
                 </>
-            )}
-
-            {frecuencia === 'semanal' && (
-                <TextInput
-                    placeholder="Número de semanas (opcional)"
-                    value={repeticiones}
-                    onChangeText={setRepeticiones}
-                    keyboardType="numeric"
-                    placeholderTextColor={styles.placeholder.color}
-                    style={styles.input}
-                />
-            )}
-
-            {frecuencia === 'fija' && (
-                <TextInput
-                    placeholder="Número de meses (opcional)"
-                    value={repeticiones}
-                    onChangeText={setRepeticiones}
-                    keyboardType="numeric"
-                    placeholderTextColor={styles.placeholder.color}
-                    style={styles.input}
-                />
             )}
 
             {frecuencia === 'personalizada' && (
