@@ -109,7 +109,6 @@ export default function HomeScreen({ navigation }) {
                 });
             }
         });
-        console.log("Deudas filtradas para FlatList:", deudasFiltradas); // Verifica si hay datos que pasan el filtro
 
         setDeudasFiltradas(resultado);
     };
@@ -121,22 +120,20 @@ export default function HomeScreen({ navigation }) {
     };
 
     const renderItem = ({ item }) => {
-        // Calcular pagos realizados (basado en el historial de pagos)
         const pagosRealizados = (item.historialPagos || []).length;
 
         // Ajustar totalPagos según el tipo de frecuencia y las repeticiones
-        let totalPagos = item.repeticiones || 1; // Si no hay repeticiones, por defecto es 1
+        let totalPagos = item.repeticiones || 1;
 
-        // Si la frecuencia es semanal, fija, o cualquier otra que dependa de repeticiones
         if (item.frecuencia === 'semanal' || item.frecuencia === 'fija') {
             totalPagos = item.repeticiones || 1;
         } else if (item.frecuencia === 'dias') {
-            totalPagos = item.repeticiones || 1; // En este caso, `repeticiones` debería indicar la cantidad de pagos
+            totalPagos = item.repeticiones || 1;
         } else if (item.frecuencia === 'inicio_mes' || item.frecuencia === 'fin_mes') {
-            totalPagos = item.meses || 1; // En este caso, `meses` es lo que determina cuántos pagos se deben realizar
+            totalPagos = item.meses || 1; // Número de meses a pagar
         }
 
-        const completado = pagosRealizados >= totalPagos; // Si ya se completaron los pagos requeridos
+        const completado = pagosRealizados >= totalPagos;
 
         const hoy = new Date();
         const fechaUltimoPago = new Date(item.fechasDelMes[0]?.fecha);
@@ -144,9 +141,8 @@ export default function HomeScreen({ navigation }) {
         const vencido = fechaUltimoPago < hoy && item.fechasDelMes[0].estado === '⏳ Pendiente';
         const proximoPagoEstaSemana = (fechaUltimoPago - hoy) <= 7 * 24 * 60 * 60 * 1000 && item.fechasDelMes[0].estado === '⏳ Pendiente';
 
-        // 🎨 Color de borde según estado
         const bordeColor = completado
-            ? '#cccccc' // Gris si completado
+            ? '#cccccc'
             : vencidoHoy
                 ? '#FFD700'
                 : vencido
@@ -157,12 +153,32 @@ export default function HomeScreen({ navigation }) {
                             ? '#D3D3D3'
                             : '#75cec5';
 
+        // Verificar el índice del primer pago pendiente
+        const primerPagoPendienteIndex = item.fechasDelMes.findIndex(f => f.estado === '⏳ Pendiente');
+
+        // Si ya se pagó la fecha, actualizamos el estado
+        const actualizarEstadoPago = () => {
+            // Copiar las fechas del mes
+            const nuevasFechasDelMes = [...item.fechasDelMes];
+            // Actualizar el estado de la primera fecha pendiente
+            if (primerPagoPendienteIndex >= 0) {
+                nuevasFechasDelMes[primerPagoPendienteIndex].estado = '✔ Pagado';
+            }
+
+            // Actualizar la deuda con el nuevo estado de fechasDelMes
+            const deudaActualizada = {
+                ...item,
+                fechasDelMes: nuevasFechasDelMes,
+            };
+
+            // Actualizar la deuda en la base de datos o en el estado
+            actualizarDeudaEnStorage(deudaActualizada);
+        };
+
+        const desactivarPago = !item.fechasDelMes[primerPagoPendienteIndex]?.estado === '⏳ Pendiente';
+
         return (
-            <View style={[
-                styles.item,
-                { borderLeftColor: bordeColor },
-                completado && { opacity: 0.5 }, // Difuminar si completado
-            ]}>
+            <View style={[styles.item, { borderLeftColor: bordeColor }, completado && { opacity: 0.5 }]}>
                 <Text style={styles.titulo}>💰 {item.motivo}</Text>
                 <Text style={styles.texto}>Monto a pagar: S/ {item.montoTotal}</Text>
                 <Text style={styles.texto}>
@@ -174,7 +190,7 @@ export default function HomeScreen({ navigation }) {
                 </Text>
 
                 {item.fechasDelMes.length > 0 && (
-                    <Text style={[styles.texto, { marginTop: 6, fontWeight: 'bold' }]} >
+                    <Text style={[styles.texto, { marginTop: 6, fontWeight: 'bold' }]}>
                         📆 Pago del mes: {item.fechasDelMes[0].fecha} - {item.fechasDelMes[0].estado}
                     </Text>
                 )}
@@ -192,34 +208,55 @@ export default function HomeScreen({ navigation }) {
                     <Text style={styles.texto}>📚 Ver historial</Text>
                 </TouchableOpacity>
 
-                {/* ✅ Mostrar botón de marcar si no está completado */}
-                {!completado && (
+                {/* ✅ Mostrar botón de marcar como pagado si el pago aún está pendiente */}
+                {!completado && primerPagoPendienteIndex >= 0 && (
                     <TouchableOpacity
-                        style={styles.botonSecundario}
-                        onPress={() => navigation.navigate('MarcarPagado', { deuda: item, index: item.index })}
+                        style={[styles.botonSecundario, desactivarPago && { backgroundColor: '#d3d3d3' }]}
+                        onPress={() => {
+                            // Cuando el pago se marca como pagado, actualizar el estado
+                            actualizarEstadoPago();
+                            navigation.navigate('MarcarPagado', { deuda: item, index: item.index });
+                        }}
+                        disabled={desactivarPago}
                     >
                         <Text style={styles.botonSecundarioTexto}>Marcar como pagado</Text>
                     </TouchableOpacity>
                 )}
             </View>
         );
-};
+    };
 
-    // useEffect para controlar la alerta (se ejecuta una sola vez)
+// Función para actualizar la deuda en el almacenamiento
+    const actualizarDeudaEnStorage = async (deudaActualizada) => {
+        try {
+            const deudas = await obtenerDeudas(); // Obtén las deudas actuales
+            const index = deudas.findIndex(deuda => deuda.index === deudaActualizada.index);
+            if (index >= 0) {
+                deudas[index] = deudaActualizada; // Reemplazamos la deuda con la nueva información
+                await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(deudas)); // Guardamos las deudas actualizadas
+            }
+        } catch (error) {
+            console.error('Error al actualizar deuda:', error);
+        }
+    };
+
+
     useEffect(() => {
         deudasFiltradas.forEach(item => {
             const hoy = new Date();
             const fechaUltimoPago = new Date(item.fechasDelMes[0]?.fecha);
-            const esHoy = fechaUltimoPago.toDateString() === hoy.toDateString(); // Compara si es el mismo día
+            const esHoy = fechaUltimoPago.toDateString() === hoy.toDateString();
             if (esHoy && item.fechasDelMes[0].estado === '⏳ Pendiente' && !alertaMostrada) {
                 Alert.alert(
                     'Alerta',
                     `¡La deuda de ${item.motivo} vence hoy y aún no se ha pagado!`
                 );
-                setAlertaMostrada(true); // Evita mostrar la alerta nuevamente
+                setAlertaMostrada(true);
             }
         });
     }, [deudasFiltradas, alertaMostrada]);
+
+
 
     return (
         <View style={styles.container}>
