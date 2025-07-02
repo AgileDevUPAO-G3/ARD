@@ -8,6 +8,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { useColorScheme } from 'react-native';
 import { actualizarDeuda } from '../utils/storage';
 
+
 export default function MarcarPagadoScreen({ route, navigation }) {
     const { deuda, index } = route.params;
     const esquema = useColorScheme();
@@ -55,17 +56,20 @@ export default function MarcarPagadoScreen({ route, navigation }) {
         };
 
         const historialActual = deuda.historialPagos || [];
+        console.log('Historial de pagos antes de actualizar:', historialActual);
 
         const nuevaData = {
             estaPagada: true,
             historialPagos: [...historialActual, nuevoComprobante],
         };
 
+        console.log('Nuevo estado de la deuda antes de guardar:', nuevaData);
 
         await actualizarDeuda(index, nuevaData);
         Alert.alert('Éxito', 'Deuda marcada como pagada.');
         navigation.goBack();
     };
+
 
     const esImagen = /\.(jpg|jpeg|png|webp)$/i.test(comprobanteUri || '');
 

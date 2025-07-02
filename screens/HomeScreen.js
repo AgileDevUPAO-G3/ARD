@@ -3,7 +3,8 @@ import {
     View, FlatList, Text, StyleSheet, TouchableOpacity, Alert
 } from 'react-native';
 import { useColorScheme } from 'react-native';
-import { obtenerDeudas } from '../utils/storage';
+import { obtenerDeudas, guardarDeuda, actualizarDeuda } from '../utils/storage';
+
 
 export default function HomeScreen({ navigation }) {
     const sistemaEsquema = useColorScheme();
@@ -30,11 +31,14 @@ export default function HomeScreen({ navigation }) {
     }, [mesActual]);
 
     const filtrarPorMes = (deudas) => {
+        console.log('Filtrando deudas por mes...');
+
         const año = mesActual.getFullYear();
         const mes = mesActual.getMonth(); // 0-indexed
         const resultado = [];
 
         deudas.forEach((item, index) => {
+            console.log(`Procesando deuda: ${item.motivo}`);
             const fechaBase = new Date(item.fechaInicio);
             const historial = item.historialPagos || [];
             const fechasPagadas = new Set(historial.map(p => p.fecha));
@@ -43,6 +47,7 @@ export default function HomeScreen({ navigation }) {
             const agregarFecha = (f) => {
                 if (f.getFullYear() === año && f.getMonth() === mes) {
                     const fStr = f.toISOString().split('T')[0];
+                    console.log(`Agregando fecha: ${fStr} con estado: ${fechasPagadas.has(fStr) ? '✔ Pagado' : '⏳ Pendiente'}`);
                     fechasEnMes.push({
                         fecha: fStr,
                         estado: fechasPagadas.has(fStr) ? '✔ Pagado' : '⏳ Pendiente'
@@ -109,7 +114,7 @@ export default function HomeScreen({ navigation }) {
                 });
             }
         });
-
+        console.log('Deudas filtradas:', resultado);  // Log para ver las deudas filtradas
         setDeudasFiltradas(resultado);
     };
 
@@ -121,6 +126,12 @@ export default function HomeScreen({ navigation }) {
 
     const renderItem = ({ item }) => {
         const pagosRealizados = (item.historialPagos || []).length;
+        console.log(`Renderizando deuda: ${item.motivo}, Pagos realizados: ${pagosRealizados}`);  // Log para pagos realizados
+
+        // Ver los estados de las fechas
+        item.fechasDelMes.forEach((fechaItem, index) => {
+            console.log(`Fecha ${index}: ${fechaItem.fecha} - Estado: ${fechaItem.estado}`);
+        });
 
         // Ajustar totalPagos según el tipo de frecuencia y las repeticiones
         let totalPagos = item.repeticiones || 1;
@@ -155,15 +166,34 @@ export default function HomeScreen({ navigation }) {
 
         // Verificar el índice del primer pago pendiente
         const primerPagoPendienteIndex = item.fechasDelMes.findIndex(f => f.estado === '⏳ Pendiente');
+        console.log(`Primer pago pendiente para deuda ${item.motivo} en la fecha: ${primerPagoPendienteIndex}`);
+
+        // Agregar más logs para verificar si la comparación funciona correctamente
+        item.fechasDelMes.forEach((fechaItem) => {
+            console.log(`Comparando fecha: ${fechaItem.fecha} con estado: ${fechaItem.estado}`);
+            // Verificar si las fechas son comparables y con el estado correcto
+        });
 
         // Si ya se pagó la fecha, actualizamos el estado
         const actualizarEstadoPago = () => {
+            console.log('Actualizando estado de la deuda...', item.index);
+            // Verificar que estamos buscando la deuda correcta
+            console.log('Fechas actuales de la deuda:', item.fechasDelMes);
+            console.log('Historial de pagos actual:', item.historialPagos);
+
             // Copiar las fechas del mes
             const nuevasFechasDelMes = [...item.fechasDelMes];
-            // Actualizar el estado de la primera fecha pendiente
+
+            // Verificar cuál es la fecha pendiente
             if (primerPagoPendienteIndex >= 0) {
+                console.log(`Fecha pendiente encontrada: ${nuevasFechasDelMes[primerPagoPendienteIndex].fecha}`);
                 nuevasFechasDelMes[primerPagoPendienteIndex].estado = '✔ Pagado';
+            } else {
+                console.log('No se encontró ninguna fecha pendiente.');
             }
+
+            // Verifica que las fechas se están actualizando correctamente
+            console.log('Fechas después de actualización:', nuevasFechasDelMes);
 
             // Actualizar la deuda con el nuevo estado de fechasDelMes
             const deudaActualizada = {
@@ -171,11 +201,14 @@ export default function HomeScreen({ navigation }) {
                 fechasDelMes: nuevasFechasDelMes,
             };
 
-            // Actualizar la deuda en la base de datos o en el estado
+            console.log('Deuda actualizada antes de guardar:', deudaActualizada);
+            // Guardar la deuda actualizada en el almacenamiento
             actualizarDeudaEnStorage(deudaActualizada);
         };
 
-        const desactivarPago = !item.fechasDelMes[primerPagoPendienteIndex]?.estado === '⏳ Pendiente';
+
+        const desactivarPago = primerPagoPendienteIndex === -1 || item.fechasDelMes[primerPagoPendienteIndex].estado === '✔ Pagado';
+        console.log(`Desactivar pago para deuda ${item.motivo}: ${desactivarPago}`);
 
         return (
             <View style={[styles.item, { borderLeftColor: bordeColor }, completado && { opacity: 0.5 }]}>
@@ -190,7 +223,7 @@ export default function HomeScreen({ navigation }) {
                 </Text>
 
                 {item.fechasDelMes.length > 0 && (
-                    <Text style={[styles.texto, { marginTop: 6, fontWeight: 'bold' }]}>
+                    <Text style={[styles.texto, { marginTop: 6, fontWeight: 'bold' }]}>{/* Aquí muestra la fecha y el estado actual */}
                         📆 Pago del mes: {item.fechasDelMes[0].fecha} - {item.fechasDelMes[0].estado}
                     </Text>
                 )}
@@ -229,16 +262,21 @@ export default function HomeScreen({ navigation }) {
 // Función para actualizar la deuda en el almacenamiento
     const actualizarDeudaEnStorage = async (deudaActualizada) => {
         try {
+            console.log('Guardando deuda actualizada:', deudaActualizada);
             const deudas = await obtenerDeudas(); // Obtén las deudas actuales
             const index = deudas.findIndex(deuda => deuda.index === deudaActualizada.index);
             if (index >= 0) {
                 deudas[index] = deudaActualizada; // Reemplazamos la deuda con la nueva información
+                console.log('Deuda antes de guardar en AsyncStorage:', deudas[index]);
                 await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(deudas)); // Guardamos las deudas actualizadas
+            } else {
+                console.warn('Deuda no encontrada en almacenamiento');
             }
         } catch (error) {
-            console.error('Error al actualizar deuda:', error);
+            console.error('Error al actualizar deuda en storage:', error);
         }
     };
+
 
 
     useEffect(() => {
