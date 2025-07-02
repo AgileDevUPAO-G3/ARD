@@ -109,6 +109,7 @@ export default function HomeScreen({ navigation }) {
                 });
             }
         });
+        console.log("Deudas filtradas para FlatList:", deudasFiltradas); // Verifica si hay datos que pasan el filtro
 
         setDeudasFiltradas(resultado);
     };
@@ -120,26 +121,47 @@ export default function HomeScreen({ navigation }) {
     };
 
     const renderItem = ({ item }) => {
-        // Colores según el estado de la deuda
+        // Calcular pagos realizados (basado en el historial de pagos)
+        const pagosRealizados = (item.historialPagos || []).length;
+
+        // Ajustar totalPagos según el tipo de frecuencia y las repeticiones
+        let totalPagos = item.repeticiones || 1; // Si no hay repeticiones, por defecto es 1
+
+        // Si la frecuencia es semanal, fija, o cualquier otra que dependa de repeticiones
+        if (item.frecuencia === 'semanal' || item.frecuencia === 'fija') {
+            totalPagos = item.repeticiones || 1;
+        } else if (item.frecuencia === 'dias') {
+            totalPagos = item.repeticiones || 1; // En este caso, `repeticiones` debería indicar la cantidad de pagos
+        } else if (item.frecuencia === 'inicio_mes' || item.frecuencia === 'fin_mes') {
+            totalPagos = item.meses || 1; // En este caso, `meses` es lo que determina cuántos pagos se deben realizar
+        }
+
+        const completado = pagosRealizados >= totalPagos; // Si ya se completaron los pagos requeridos
+
         const hoy = new Date();
         const fechaUltimoPago = new Date(item.fechasDelMes[0]?.fecha);
-
-        // Comprobar si la deuda vence hoy
-        const vencidoHoy = fechaUltimoPago.toISOString().split('T')[0] === hoy.toISOString().split('T')[0] && item.fechasDelMes[0].estado === '⏳ Pendiente';
-
-        // Comprobar si la deuda ya está vencida (pero no es hoy)
+        const vencidoHoy = fechaUltimoPago.toDateString() === hoy.toDateString() && item.fechasDelMes[0].estado === '⏳ Pendiente';
         const vencido = fechaUltimoPago < hoy && item.fechasDelMes[0].estado === '⏳ Pendiente';
-
-        // Comprobar si la deuda vence esta semana
         const proximoPagoEstaSemana = (fechaUltimoPago - hoy) <= 7 * 24 * 60 * 60 * 1000 && item.fechasDelMes[0].estado === '⏳ Pendiente';
 
+        // 🎨 Color de borde según estado
+        const bordeColor = completado
+            ? '#cccccc' // Gris si completado
+            : vencidoHoy
+                ? '#FFD700'
+                : vencido
+                    ? '#FF6F6F'
+                    : proximoPagoEstaSemana
+                        ? '#FFD700'
+                        : item.fechasDelMes[0].estado === '✔ Pagado'
+                            ? '#D3D3D3'
+                            : '#75cec5';
+
         return (
-            <View style={[styles.item,
-                vencidoHoy ? { borderLeftColor: '#FFD700' } : // Amarillo para pagos vencidos hoy
-                    vencido ? { borderLeftColor: '#FF6F6F' } : // Rojo para vencidas no pagadas
-                        proximoPagoEstaSemana ? { borderLeftColor: '#FFD700' } : // Amarillo para pagos por vencer
-                            item.fechasDelMes[0].estado === '✔ Pagado' ? { backgroundColor: '#D3D3D3' } : // Gris para pagos realizados
-                                { borderLeftColor: '#75cec5' } // Color default
+            <View style={[
+                styles.item,
+                { borderLeftColor: bordeColor },
+                completado && { opacity: 0.5 }, // Difuminar si completado
             ]}>
                 <Text style={styles.titulo}>💰 {item.motivo}</Text>
                 <Text style={styles.texto}>Monto a pagar: S/ {item.montoTotal}</Text>
@@ -151,60 +173,37 @@ export default function HomeScreen({ navigation }) {
                         : item.frecuencia}
                 </Text>
 
-                {item.frecuencia === 'inicio_mes' && (
-                    <Text style={[styles.texto, { fontStyle: 'italic' }]}>📅 Este pago ocurre el primer día de cada mes</Text>
-                )}
-                {item.frecuencia === 'fin_mes' && (
-                    <Text style={[styles.texto, { fontStyle: 'italic' }]}>📅 Este pago ocurre el último día de cada mes</Text>
-                )}
                 {item.fechasDelMes.length > 0 && (
                     <Text style={[styles.texto, { marginTop: 6, fontWeight: 'bold' }]} >
                         📆 Pago del mes: {item.fechasDelMes[0].fecha} - {item.fechasDelMes[0].estado}
                     </Text>
                 )}
 
+                {/* ✅ Progreso */}
+                <Text style={[styles.texto, { fontStyle: 'italic', marginTop: 4 }]}>
+                    Progreso de pagos: {pagosRealizados} / {totalPagos}
+                </Text>
+
+                {/* 📚 Ver historial (siempre accesible) */}
                 <TouchableOpacity
                     style={styles.botonVerHistorial}
-                    onPress={() => navigation.navigate('Historial', { deuda: item })}
+                    onPress={() => navigation.navigate('Historial', { deuda: item, index: item.index })}
                 >
                     <Text style={styles.texto}>📚 Ver historial</Text>
                 </TouchableOpacity>
 
-                {(() => {
-                    // Extra: verificar si puede marcar como pagado este mes
-                    const historial = item.historialPagos || [];
-                    const fechasPagadas = new Set(historial.map(p => p.fecha));
-
-                    const fechaDelMesActual = item.fechasDelMes[0]?.fecha;
-
-                    const fechaAnterior = new Date(fechaDelMesActual);
-                    fechaAnterior.setMonth(fechaAnterior.getMonth() - 1);
-                    const año = fechaAnterior.getFullYear();
-                    const mes = fechaAnterior.getMonth();
-
-                    const fechaRequerida = item.fechasDelMes.find(f => {
-                        const d = new Date(f.fecha);
-                        return d.getFullYear() === año && d.getMonth() === mes;
-                    });
-
-                    const puedeMarcar = !fechaRequerida || fechasPagadas.has(fechaRequerida.fecha);
-
-                    return puedeMarcar ? (
-                        <TouchableOpacity
-                            style={styles.botonSecundario}
-                            onPress={() => navigation.navigate('MarcarPagado', { deuda: item, index: item.index })}
-                        >
-                            <Text style={styles.botonSecundarioTexto}>Marcar como pagado</Text>
-                        </TouchableOpacity>
-                    ) : (
-                        <Text style={[styles.texto, { marginTop: 10, color: 'red' }]} >
-                            ⚠ Debe marcar como pagado el mes anterior primero.
-                        </Text>
-                    );
-                })()}
+                {/* ✅ Mostrar botón de marcar si no está completado */}
+                {!completado && (
+                    <TouchableOpacity
+                        style={styles.botonSecundario}
+                        onPress={() => navigation.navigate('MarcarPagado', { deuda: item, index: item.index })}
+                    >
+                        <Text style={styles.botonSecundarioTexto}>Marcar como pagado</Text>
+                    </TouchableOpacity>
+                )}
             </View>
         );
-    };
+};
 
     // useEffect para controlar la alerta (se ejecuta una sola vez)
     useEffect(() => {

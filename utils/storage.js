@@ -9,8 +9,9 @@ export const guardarDeuda = async (nuevaDeuda) => {
 
         const deudaCompleta = {
             ...nuevaDeuda,
-            historialPagos: [], // ← importante
+            historialPagos: [],
             estaPagada: false,
+            archivosGuardados: 0 // ← opcional, para evitar undefined más adelante
         };
 
         lista.push(deudaCompleta);
@@ -33,16 +34,13 @@ export const obtenerDeudas = async () => {
 
 export const actualizarDeuda = async (id, nuevaData) => {
     try {
-        const deudas = await obtenerDeudas();
-
+        const deudas = await obtenerDeudas(); // Obtén las deudas actuales
         if (!deudas[id]) {
             console.warn(`No se encontró deuda con id ${id}`);
             return;
         }
-
-        deudas[id] = { ...deudas[id], ...nuevaData };
-
-        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(deudas));
+        deudas[id] = { ...deudas[id], ...nuevaData }; // Actualiza la deuda con la nueva data
+        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(deudas)); // Guarda las deudas actualizadas
     } catch (error) {
         console.error('Error al actualizar deuda:', error);
     }
